@@ -1,55 +1,41 @@
-# Prerequisites
-*.d
+# PlatformIO / embedded build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch/
 
-# Object files
-*.o
-*.ko
-*.obj
+# Arduino build outputs
+build/
+*.bin
 *.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
 *.hex
+*.map
+*.lst
+*.eep
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# Compiled objects and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Logs and local runtime files
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
 
-# debug information files
-*.dwo
+# Local-only secrets and deployment configuration
+secrets.*
+*.local
+.env
+.env.*
+config/private*
