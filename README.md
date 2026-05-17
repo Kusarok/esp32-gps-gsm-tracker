@@ -1,230 +1,208 @@
-# ESP32 GPS GSM Tracker
+# ESP32 GPS/GSM Tracker
 
-A production-ready Arduino sketch for building a compact real-time vehicle or asset tracker with an ESP32, a GPS/GNSS receiver, and a GSM/GPRS modem. The firmware reads NMEA location data, sends periodic HTTP telemetry over GPRS, and can reply to SMS messages containing the keyword `location` with a Google Maps link.
+[![PlatformIO](https://img.shields.io/badge/build-PlatformIO-orange)](https://platformio.org/)
+[![Framework](https://img.shields.io/badge/framework-Arduino-blue)](https://www.arduino.cc/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Table of Contents
+A production-oriented **IoT telemetry device** for remote GPS tracking with an ESP32, a GNSS receiver, and a SIM800-class GSM/GPRS modem. The firmware implements a compact embedded communication stack for real-time GPS acquisition, SMS-based diagnostics, and HTTP telemetry publishing over a GSM/GPRS transport layer.
 
-- [Features](#features)
-- [Project Status](#project-status)
-- [Hardware Modules Required](#hardware-modules-required)
-- [Software Requirements](#software-requirements)
-- [Repository Structure](#repository-structure)
-- [Wiring](#wiring)
-- [Configuration](#configuration)
-- [Build and Upload](#build-and-upload)
-- [Server Integration](#server-integration)
-- [SMS Commands](#sms-commands)
-- [Power Design Notes](#power-design-notes)
-- [Troubleshooting](#troubleshooting)
-- [Useful Websites and References](#useful-websites-and-references)
-- [Security Notes](#security-notes)
-- [License](#license)
+![System architecture](assets/system-architecture.png)
 
-## Features
+## Project Overview
 
-- ESP32-based tracker firmware for Arduino IDE or Arduino CLI.
-- GPS/GNSS parsing with TinyGPS++.
-- GSM/GPRS data connection through AT commands.
-- Periodic live tracking over HTTP GET requests.
-- Multiple server IP fallback support.
-- SMS location request support.
-- Google Maps link generation for SMS replies.
-- GPS timestamp, speed, altitude, satellite count, and HDOP-based accuracy support.
-- Public-safe default configuration placeholders for device ID, APN, server host, and server IPs.
+This repository demonstrates a senior-level embedded systems project structure for a cellular **remote tracking system**. The device continuously reads GPS NMEA data, maintains the latest validated position snapshot, and publishes telemetry to one or more backend endpoints through a fault-tolerant networking flow.
 
-## Project Status
+The project is designed for portfolio visibility and practical engineering review:
 
-This project is intended for hobby, prototyping, fleet proof-of-concept, and educational tracking systems. Before using it in a production or safety-critical environment, validate the power supply, enclosure, cellular coverage, antenna placement, data privacy requirements, and backend availability.
+- Firmware is isolated under [`firmware/`](firmware/esp32_gps_gsm_tracker.ino).
+- Documentation is separated under [`docs/`](docs/).
+- Visual engineering assets are stored in [`assets/`](assets/).
+- Build configuration is defined by [`platformio.ini`](platformio.ini).
+- Sensitive deployment values are represented only by placeholders.
 
-## Hardware Modules Required
-
-| Category | Recommended Module | Purpose | Notes |
-| --- | --- | --- | --- |
-| Microcontroller | ESP32 DevKit / ESP32-WROOM development board | Main controller | Requires at least two hardware UARTs for reliable GPS and GSM communication. |
-| GPS/GNSS receiver | u-blox NEO-6M, NEO-M8N, ATGM336H, or compatible NMEA receiver | Position, speed, date, and time | Use a module with an external antenna connector when installing inside a vehicle. |
-| GSM/GPRS modem | SIM800L, SIM800C, SIM900, or compatible 2G AT-command modem | SMS and GPRS telemetry | SIM800/SIM900 are 2G modules; confirm 2G service is still available in your country. |
-| SIM card | Data/SMS-enabled SIM | Cellular connectivity | Disable PIN lock before deployment and confirm the APN with the carrier. |
-| GSM antenna | 2G quad-band antenna | Cellular signal | Keep away from the GPS antenna and noisy power electronics. |
-| GPS antenna | Active or passive GPS antenna, depending on module | Satellite reception | Place with clear sky view when possible. |
-| Power supply | Stable 5 V source for ESP32 plus 4.0 V capable high-current supply for SIM800-class modem | System power | GSM modems can draw current bursts near 2 A. Do not power SIM800L directly from the ESP32 3.3 V pin. |
-| Buck converter | LM2596, MP1584, or automotive-grade DC-DC converter | Vehicle battery conversion | Use adequate filtering and transient protection for vehicle installs. |
-| Logic-level wiring | Jumper wires or PCB traces | UART connections | Most ESP32 GPIOs are 3.3 V logic. Check your modem breakout logic levels. |
-| Optional backup battery | Li-ion/LiPo plus charger/protection board | Operation during power loss | Size according to modem current peaks and expected runtime. |
-| Optional enclosure | Plastic or weather-resistant enclosure | Mechanical protection | Avoid metal enclosures around antennas unless external antennas are used. |
-
-## Software Requirements
-
-- [Arduino IDE](https://www.arduino.cc/en/software) or [Arduino CLI](https://arduino.github.io/arduino-cli/).
-- [Arduino ESP32 Core by Espressif](https://docs.espressif.com/projects/arduino-esp32/en/latest/).
-- [TinyGPS++ library](https://github.com/mikalhart/TinyGPSPlus).
-- USB serial driver for your ESP32 board, such as CP210x or CH340, depending on the board.
-
-## Repository Structure
+## Repository Layout
 
 ```text
 .
-├── esp32_gps_gsm_tracker.ino   # Main Arduino sketch
-├── README.md                   # Project documentation
-├── LICENSE                     # Project license
-└── .gitignore                  # Git ignore rules
+├── assets/
+│   └── system-architecture.png
+├── docs/
+│   ├── hardware-integration.md
+│   ├── system-architecture.md
+│   └── telemetry-protocol.md
+├── firmware/
+│   └── esp32_gps_gsm_tracker.ino
+├── .gitignore
+├── LICENSE
+├── README.md
+└── platformio.ini
 ```
 
-The sketch was renamed from a generic `tracker.ino` filename to `esp32_gps_gsm_tracker.ino` so the project name is clearer and more professional.
+## Features
 
-## Wiring
+- **Real-time GPS acquisition** through a dedicated ESP32 hardware UART.
+- **Telemetry pipeline** that converts validated GPS fixes into backend-friendly HTTP payloads.
+- **GSM/GPRS transport layer** using AT commands and TCP sockets.
+- **Fault-tolerant networking** pattern with multiple configurable server endpoints.
+- **SMS command support** for field diagnostics and on-demand location retrieval.
+- UCS2 decoding support for modems or carriers that deliver SMS metadata in encoded form.
+- Sanitized configuration defaults for APN, device ID, server host, backend IPs, and credentials.
+- PlatformIO-ready project configuration for repeatable builds.
 
-Default UART pin assignments are defined in the sketch:
+## Hardware Requirements
 
-| ESP32 Pin | Connects To | Description |
+| Component | Recommended Role | Notes |
 | --- | --- | --- |
-| GPIO32 | GPS TX | ESP32 receives NMEA data from the GPS module. |
-| GPIO33 | GPS RX | ESP32 transmits to GPS module, if supported. |
-| GPIO26 | GSM TX | ESP32 receives modem responses. |
-| GPIO27 | GSM RX | ESP32 sends AT commands to the modem. |
-| GND | GPS GND and GSM GND | Common ground is required. |
-| 5 V / VIN | ESP32 power input | Depends on board design. |
-| 3.7 V to 4.2 V high-current supply | SIM800-class modem VCC | Use a supply that can handle cellular transmit bursts. |
+| ESP32 development board | Main MCU | Uses UART1 for GSM and UART2 for GPS. |
+| GPS/GNSS receiver | Positioning source | NMEA-compatible module supported by TinyGPS++. |
+| SIM800/SIM900-class GSM modem | Cellular modem | Provides SMS and GPRS TCP/IP connectivity. |
+| Active GPS antenna | GNSS reception | Strongly recommended for vehicle or enclosure deployments. |
+| Cellular antenna | GSM/GPRS connectivity | Match antenna and modem frequency bands to local carrier. |
+| SIM card with data/SMS plan | Network access | Disable SIM PIN before deployment. |
+| Stable modem power supply | RF burst current | Cellular modems can draw high transient current during transmit. |
+| Common ground wiring | Signal reference | ESP32, GPS, modem, and power supplies must share ground. |
 
-If your hardware uses different pins, update these constants in `esp32_gps_gsm_tracker.ino`:
+## Pin Mapping
+
+| ESP32 GPIO | Peripheral Signal | Direction | Firmware Constant | Engineering Notes |
+| --- | --- | --- | --- | --- |
+| GPIO32 | GPS TX → ESP32 RX2 | Input | `Pins::GPS_RX` | Receives NMEA sentences from the GPS receiver. |
+| GPIO33 | GPS RX ← ESP32 TX2 | Output | `Pins::GPS_TX` | Optional GPS configuration channel. |
+| GPIO26 | GSM TX → ESP32 RX1 | Input | `Pins::GSM_RX` | Receives modem AT responses and SMS notifications. |
+| GPIO27 | GSM RX ← ESP32 TX1 | Output | `Pins::GSM_TX` | Sends AT commands, HTTP payloads, and SMS content. |
+| GND | Common ground | Reference | N/A | Required for reliable UART communication. |
+
+## Firmware Configuration
+
+Before building a private deployment, update only the placeholder values in `firmware/esp32_gps_gsm_tracker.ino`:
 
 ```cpp
-#define GPS_RX_PIN 32
-#define GPS_TX_PIN 33
-#define GSM_RX_PIN 26
-#define GSM_TX_PIN 27
+namespace TelemetryConfig {
+constexpr const char* SERVER_HOST = "tracking.example.invalid";
+constexpr const char* SERVER_IPS[] = {"192.0.2.10", "192.0.2.11"};
+constexpr uint16_t SERVER_PORT = 22945;
+constexpr const char* DEVICE_ID = "DEVICE_ID_PLACEHOLDER";
+}
+
+namespace CellularConfig {
+constexpr const char* APN = "APN_PLACEHOLDER";
+constexpr const char* APN_USER = "APN_USER_PLACEHOLDER";
+constexpr const char* APN_PASS = "APN_PASSWORD_PLACEHOLDER";
+}
 ```
 
-## Configuration
+Do **not** commit real APNs, production server IPs, credentials, SIM identifiers, authentication tokens, or unique device IDs. Use private build-time configuration, deployment notes, or a secrets management process for real deployments.
 
-Before uploading, edit the configuration block at the top of `esp32_gps_gsm_tracker.ino`.
+## GSM/GPRS Telemetry Explanation
 
-```cpp
-#define GPS_SERVER_HOST "SERVER_HOST"
-const char* GPS_SERVER_IPS[] = {"SERVER_IP_1", "SERVER_IP_2"};
-const int NUM_SERVERS = 2;
-#define GPS_SERVER_PORT 22945
-#define GPS_DEVICE_ID "DEVICE_ID"
+The modem is managed through AT commands over UART1. During startup, the firmware disables command echo, checks modem registration, enables SMS text mode, and prepares live SMS notifications. For telemetry, the firmware initializes a PDP context using the sanitized APN placeholders, requests an IP address, and opens a TCP socket to each configured backend endpoint.
 
-#define APN "YOUR_APN"
-#define APN_USER "YOUR_APN_USER"
-#define APN_PASS "YOUR_APN_PASSWORD"
-```
-
-Replace the placeholders as follows:
-
-| Placeholder | Meaning | Example Format |
-| --- | --- | --- |
-| `SERVER_HOST` | HTTP `Host` header expected by your telemetry platform | `example.tracking.server` |
-| `SERVER_IP_1`, `SERVER_IP_2` | Backend IP addresses for TCP connection attempts | `203.0.113.10` |
-| `GPS_SERVER_PORT` | TCP port exposed by your tracking backend | `80`, `5055`, or provider-specific port |
-| `DEVICE_ID` | Public-safe tracker identifier registered on your backend | `VEHICLE_001` |
-| `YOUR_APN` | Carrier APN | Carrier-specific |
-| `YOUR_APN_USER` | APN username, if required | Usually empty or carrier-specific |
-| `YOUR_APN_PASSWORD` | APN password, if required | Usually empty or carrier-specific |
-
-Never commit real APNs, private server hosts, production IP addresses, SIM credentials, or device identifiers to a public repository.
-
-## Build and Upload
-
-### Arduino IDE
-
-1. Install Arduino IDE.
-2. Add the ESP32 board package through Boards Manager.
-3. Install the TinyGPS++ library through Library Manager.
-4. Open `esp32_gps_gsm_tracker.ino`.
-5. Select your ESP32 board and serial port.
-6. Configure the placeholders described above.
-7. Upload the sketch.
-8. Open Serial Monitor at `115200` baud.
-
-### Arduino CLI Example
-
-```bash
-arduino-cli core install esp32:esp32
-arduino-cli lib install TinyGPSPlus
-arduino-cli compile --fqbn esp32:esp32:esp32 .
-arduino-cli upload -p /dev/ttyUSB0 --fqbn esp32:esp32:esp32 .
-```
-
-Your fully qualified board name may be different depending on the ESP32 board package and board model.
-
-## Server Integration
-
-The firmware sends HTTP GET requests in this format:
+The HTTP payload is intentionally simple for constrained embedded deployments:
 
 ```text
-/?id=DEVICE_ID&lat=LATITUDE&lon=LONGITUDE&timestamp=UNIX_TIME&speed=SPEED&bearing=0&altitude=ALTITUDE&accuracy=ACCURACY&batt=100
+/?id=DEVICE_ID_PLACEHOLDER&lat=LATITUDE&lon=LONGITUDE&timestamp=UNIX_TIME&speed=SPEED&bearing=0&altitude=ALTITUDE&accuracy=ACCURACY&batt=100
 ```
 
-The backend must accept TCP connections on `GPS_SERVER_PORT` and process the request path. The firmware currently sends a simple HTTP/1.1 request with a configurable `Host` header.
+The GSM/GPRS transport layer sends this request with a configurable `Host` header and closes the socket after each publish cycle. Multiple backend IPs provide a basic fault-tolerant networking strategy when cellular routes or backend nodes are temporarily unavailable.
 
-Compatible backend options include:
+## GPS Data Pipeline Explanation
 
-- A custom HTTP endpoint.
-- [Traccar](https://www.traccar.org/) with a compatible HTTP/protocol endpoint.
-- [flespi](https://flespi.com/) or another IoT gateway configured to accept this payload shape.
+The GPS pipeline runs continuously in the main loop:
 
-Confirm the exact path, port, and authentication requirements for your backend before deployment.
+1. UART2 ingests raw NMEA characters from the GNSS module.
+2. TinyGPS++ parses each sentence and updates fix validity, latitude, longitude, speed, altitude, HDOP, satellite count, date, and UTC time.
+3. The firmware samples a `GpsTelemetry` snapshot when the publish interval expires.
+4. Valid fixes are serialized into the telemetry pipeline.
+5. If GPS date/time is valid and recent enough, the payload includes a Unix timestamp. Otherwise, the backend is expected to apply its receive timestamp.
 
-## SMS Commands
+This separation keeps real-time GPS acquisition independent from slower cellular network operations.
 
-Send an SMS containing the word:
+## SMS Command Support
+
+The firmware supports an SMS control-plane command:
 
 ```text
 location
 ```
 
-The device replies with:
+When the command is received, the device replies with:
 
-- Latitude.
-- Longitude.
+- Latitude and longitude.
 - Speed in km/h.
-- Google Maps URL.
+- A Google Maps link for the latest fix.
+- A satellite-searching status message if no valid fix is available.
 
-If the GPS fix is not available, the device replies that it is still searching for satellites.
+This allows field technicians to verify device state without backend access and gives the remote tracking system an out-of-band diagnostic path.
 
-## Power Design Notes
+## System Architecture
 
-- SIM800-class modems can reset or fail to attach to the network if the power supply cannot handle transmit bursts.
-- Use short, thick power wires for the modem.
-- Add bulk capacitance near the modem power pins when using breadboards or long leads.
-- Keep GPS antenna wiring away from the GSM antenna and switching regulators.
-- In vehicles, use a protected automotive DC-DC converter and consider fuse, TVS diode, reverse-polarity protection, and ignition sensing.
+The system is divided into four engineering layers:
 
-## Troubleshooting
+| Layer | Responsibility |
+| --- | --- |
+| Sensor acquisition | Reads GNSS data over UART and validates GPS fix quality. |
+| Application firmware | Schedules telemetry, formats payloads, parses SMS commands, and manages state. |
+| Embedded communication stack | Encapsulates modem AT commands, SMS handling, PDP setup, and TCP socket operations. |
+| Backend integration | Receives HTTP telemetry and performs storage, visualization, alerting, or fleet tracking. |
 
-| Symptom | Likely Cause | Fix |
-| --- | --- | --- |
-| `GSM Module NOT Responding` | Wrong UART pins, missing common ground, wrong baud rate, or no modem power | Check wiring, power, and `GSM_RX_PIN` / `GSM_TX_PIN`. |
-| GPRS fails at APN setup | Wrong APN credentials or SIM not ready | Verify APN with carrier, disable SIM PIN, test SIM in a phone. |
-| TCP connection fails | Wrong server IP, blocked port, no data plan, or weak signal | Verify IP/port, test with another client, check signal quality. |
-| GPS location not valid | No sky view, wrong UART pins, GPS baud mismatch, cold start | Move antenna outdoors and wait several minutes. |
-| SMS not received | SIM plan issue, text mode not enabled, network not registered | Check `AT+CREG?`, signal, and SMS capability. |
-| Device reboots when GSM transmits | Power supply voltage drop | Use a dedicated high-current modem supply. |
+Additional architecture notes are available in [`docs/system-architecture.md`](docs/system-architecture.md).
 
-## Useful Websites and References
+## Embedded Communication Workflow
 
-- Arduino IDE: <https://www.arduino.cc/en/software>
-- Arduino CLI: <https://arduino.github.io/arduino-cli/>
-- Arduino ESP32 Core documentation: <https://docs.espressif.com/projects/arduino-esp32/en/latest/>
-- Arduino ESP32 Core GitHub repository: <https://github.com/espressif/arduino-esp32>
-- TinyGPS++ GitHub repository: <https://github.com/mikalhart/TinyGPSPlus>
-- TinyGPS++ Arduino Library page: <https://www.arduinolibraries.info/libraries/tiny-gps-plus>
-- Espressif ESP32 product page: <https://www.espressif.com/en/products/socs/esp32>
-- SIMCom product resources: <https://www.simcom.com/product/>
-- u-blox GNSS products: <https://www.u-blox.com/en/positioning-chips-and-modules>
-- Traccar GPS tracking platform: <https://www.traccar.org/>
-- flespi IoT and telematics platform: <https://flespi.com/>
-- Google Maps search URL format: <https://maps.google.com/?q=LAT,LON>
+```text
+GPS module -> ESP32 UART2 -> TinyGPS++ parser -> telemetry snapshot
+          -> HTTP query builder -> GSM UART1 AT commands -> GPRS TCP socket
+          -> tracking backend
 
-## Security Notes
+SMS command -> GSM modem -> ESP32 parser -> latest GPS fix -> SMS response
+```
 
-- Do not publish real device IDs, APN credentials, server hosts, backend IP addresses, tokens, or SIM-related credentials.
-- Use placeholder values in source control and keep production values in private deployment notes.
-- Consider server-side authentication before accepting location data.
-- Treat GPS data as sensitive personal or operational information.
-- If the device is installed in a vehicle, comply with local tracking, consent, privacy, and telecom regulations.
+Operational sequence:
+
+1. ESP32 initializes GPS UART2 and GSM UART1.
+2. GSM modem is configured for SMS text mode and network registration checks.
+3. GPRS is attached using APN placeholders supplied by the private deployment.
+4. GPS acquisition runs continuously.
+5. Every telemetry interval, the firmware sends a location payload to each configured endpoint.
+6. SMS command handling remains active for on-demand location requests.
+
+## Build and Upload
+
+### PlatformIO
+
+```bash
+platformio run
+platformio run --target upload
+platformio device monitor -b 115200
+```
+
+### Arduino IDE
+
+1. Install the ESP32 Arduino board package.
+2. Install the TinyGPS++ library.
+3. Open `firmware/esp32_gps_gsm_tracker.ino`.
+4. Review and privately replace configuration placeholders.
+5. Select the target ESP32 board and serial port.
+6. Upload and open Serial Monitor at `115200` baud.
+
+## Future Improvements
+
+- Move deployment configuration into a private header generated from a template.
+- Add TLS-capable modem support or signed payload authentication.
+- Add battery voltage telemetry and low-power operating modes.
+- Add watchdog recovery around modem attach, TCP send, and GPS stale-fix conditions.
+- Add structured event logging for modem state transitions.
+- Add configurable telemetry intervals and geofence-based reporting.
+- Add CI checks for firmware formatting and PlatformIO builds.
+- Add backend examples for Traccar, custom HTTP ingestion, or MQTT gateways.
+
+## Security and Privacy Notes
+
+- Treat GPS data as sensitive operational and personal information.
+- Never publish production APNs, server addresses, device IDs, SIM details, or credentials.
+- Confirm consent, privacy, telecom, and vehicle-tracking requirements before deployment.
+- Use server-side authentication and rate limiting before accepting device telemetry publicly.
 
 ## License
 
-This project is released under the license included in [`LICENSE`](LICENSE).
+This project is released under the MIT License. See [`LICENSE`](LICENSE) for details.
